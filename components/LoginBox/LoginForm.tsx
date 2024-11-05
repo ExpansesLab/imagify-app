@@ -18,15 +18,15 @@ export default function SignInForm() {
     ) as HTMLInputElement;
     
     if (!validateEmail(emailAddress.value)) {
-      toast.error("Email address is incorrect!");
+      toast.error("Неверный формат email адреса!");
       return;
     }
     if (!emailAddress.value) {
-      toast.error("EmailAddress is empty!");
+      toast.error("Email адрес не может быть пустым!");
       return;
     }
     if (!loggingPassword.value) {
-      toast.error("Password is empty!");
+      toast.error("Пароль не может быть пустым!");
       return;
     }
 
@@ -38,15 +38,25 @@ export default function SignInForm() {
       });
 
       if (response?.ok) {
-        toast.success("Sign in successfully!");
-        router.push("/");
-        router.refresh();
+        toast.success("Успешный вход!");
+        
+        // Добавляем задержку для обновления сессии
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        
+        // Сначала обновляем данные
+        await router.refresh();
+        
+        // Затем делаем редирект с небольшой задержкой
+        setTimeout(() => {
+          router.push("/");
+          router.refresh();
+        }, 500);
       } else {
-        toast.error("Wrong username or password!");
+        toast.error("Неправильный логин или пароль!");
       }
     } catch (error) {
       console.error("Sign in error:", error);
-      toast.error("An error occurred during sign in");
+      toast.error("При входе произошла ошибка");
     }
   };
 
