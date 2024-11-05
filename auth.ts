@@ -6,6 +6,30 @@ import prisma from "./lib/prisma";
 import { getServerSession, type NextAuthOptions } from "next-auth";
 import { compare } from "bcrypt";
 
+declare module "next-auth" {
+  interface Session {
+    user: {
+      id: string;
+      email: string;
+      name?: string | null;
+    }
+  }
+
+  interface User {
+    id: string;
+    email: string;
+    name?: string | null;
+  }
+}
+
+declare module "next-auth/jwt" {
+  interface JWT {
+    id: string;
+    email: string;
+    name?: string | null;
+  }
+}
+
 const providers: any[] = [
   EmailProvider({
     server: process.env.EMAIL_SERVER,
@@ -63,25 +87,47 @@ const authOptions: NextAuthOptions = {
   },
   providers,
   callbacks: {
-    async session({ session, token, user }) {
-      if (session?.user) {
-        session.user = {
-          ...session.user,
-          ...user,
-        };
+    async session({ session, token }) {
+      if (token && session.user) {
+        session.user.id = token.id;
+        session.user.email = token.email;
+        session.user.name = token.name;
       }
       return session;
     },
-    async jwt({ token, user, account }) {
+    async jwt({ token, user }) {
       if (user) {
-        token.user = user;
+        token.id = user.id;
+        token.email = user.email;
+        token.name = user.name;
       }
       return token;
+    },
+  },
+  events: {
+    async signIn({ user, account, profile, isNewUser }) {
+      console.log("User signed in:", user);
+    },
+    async signOut({ session, token }) {
+      console.log("User signed out");
+    },
+    async createUser({ user }) {
+      console.log("New user created:", user);
+    },
+    async updateUser({ user }) {
+      console.log("User updated:", user);
+    },
+    async linkAccount({ user, account, profile }) {
+      console.log("Account linked to user:", user);
+    },
+    async session({ session, token }) {
+      console.log("Session is active:", session);
     },
   },
   session: {
     strategy: "jwt",
     maxAge: 24 * 60 * 60, // 24 hours
+    updateAge: 24 * 60 * 60, // Обновлять сессию каждые 24 часа
   },
   jwt: {
     secret: process.env.NEXTAUTH_SECRET,

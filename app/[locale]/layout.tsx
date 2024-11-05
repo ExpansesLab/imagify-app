@@ -80,8 +80,8 @@ export default async function RootLayout({
                     strategy="beforeInteractive"
                 ></Script>
                 <Script src="/spaghetti.js"></Script>
-                <SessionProvider>
-                    <NextIntlClientProvider messages={messages}>
+                <NextIntlClientProvider messages={messages}>
+                    <SessionProvider>
                         <AppContextProvider user={user}>
                             <div className="relative overflow-x-hidden">
                                 <GradientBg />
@@ -89,8 +89,8 @@ export default async function RootLayout({
                                 {children}
                             </div>
                         </AppContextProvider>
-                    </NextIntlClientProvider>
-                </SessionProvider>
+                    </SessionProvider>
+                </NextIntlClientProvider>
                 {process.env.NODE_ENV !== "development" ? (
                     <>
                         <GoogleAnalytics />

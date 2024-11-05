@@ -2,13 +2,8 @@ import createMiddleware from "next-intl/middleware";
 import { defaultLocale, localePrefix, locales } from "@/config/site";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-
-// Создаем middleware для интернационализации
-const intlMiddleware = createMiddleware({
-  locales,
-  localePrefix,
-  defaultLocale
-});
+import { withAuth } from "next-auth/middleware";
+import { NextRequestWithAuth } from "next-auth/middleware";
 
 // Список статических расширений файлов
 const STATIC_FILE_EXTENSIONS = [
@@ -21,7 +16,15 @@ const isStaticFile = (pathname: string) => {
   return STATIC_FILE_EXTENSIONS.some(ext => pathname.endsWith(ext));
 };
 
-export default async function middleware(request: NextRequest) {
+// Создаем middleware для интернационализации
+const intlMiddleware = createMiddleware({
+  locales,
+  localePrefix,
+  defaultLocale
+});
+
+// Создаем комбинированный middleware
+async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   // Пропускаем API маршруты, _next и статические файлы
@@ -51,6 +54,31 @@ export default async function middleware(request: NextRequest) {
 
   return response;
 }
+
+// Оборачиваем middleware в withAuth для добавления аутентификации
+export default withAuth(middleware as any, {
+  callbacks: {
+    authorized: ({ req, token }) => {
+      // Публичные маршруты, доступные без аутентификации
+      const publicPaths = [
+        '/',
+        '/sign-in',
+        '/sign-up',
+        '/api/auth',
+        '/explore-image',
+      ];
+
+      // Проверяем, является ли текущий путь публичным
+      const isPublicPath = publicPaths.some(path => 
+        req.nextUrl.pathname.startsWith(path) ||
+        req.nextUrl.pathname.startsWith(`/${defaultLocale}${path}`)
+      );
+
+      // Разрешаем доступ к публичным маршрутам или если пользователь аутентифицирован
+      return isPublicPath || !!token;
+    }
+  }
+});
 
 export const config = {
   matcher: [
