@@ -59,6 +59,23 @@ export async function POST(request: Request) {
         const payment = await checkout.getPayment(event.object.id);
         console.log('\nWebhook: Payment details:', JSON.stringify(payment, null, 2));
 
+        // Сначала пробуем найти платеж в базе данных
+        const existingPayment = await prisma.payment.findFirst({
+            where: {
+                OR: [
+                    { paymentId: payment.id },
+                    { tempPaymentId: payment.metadata?.orderId }
+                ]
+            }
+        });
+
+        console.log('\nWebhook: Existing payment in database:', JSON.stringify(existingPayment, null, 2));
+
+        if (!existingPayment) {
+            console.error('\nWebhook: Payment not found in database. PaymentId:', payment.id, 'OrderId:', payment.metadata?.orderId);
+            return NextResponse.json({ error: 'Payment not found in database' }, { status: 404 });
+        }
+
         if (payment.status === 'succeeded' && payment.metadata) {
             const { userEmail, credits, planId } = payment.metadata;
             console.log('\nWebhook: Processing successful payment');
@@ -79,9 +96,9 @@ export async function POST(request: Request) {
                 });
                 console.log('\nWebhook: Updated user credits:', JSON.stringify(updatedUser, null, 2));
 
-                // Обновляем статус платежа в базе данных, используя paymentId вместо tempPaymentId
+                // Обновляем статус платежа в базе данных
                 const updatedPayment = await prisma.payment.update({
-                    where: { paymentId: payment.id },
+                    where: { id: existingPayment.id }, // Используем id из найденного платежа
                     data: {
                         status: payment.status
                     }
@@ -99,7 +116,7 @@ export async function POST(request: Request) {
             
             // Обновляем статус платежа в базе данных, даже если он не succeeded
             const updatedPayment = await prisma.payment.update({
-                where: { paymentId: payment.id },
+                where: { id: existingPayment.id }, // Используем id из найденного платежа
                 data: {
                     status: payment.status
                 }

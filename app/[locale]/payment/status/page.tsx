@@ -9,8 +9,15 @@ type PaymentStatus = 'pending' | 'waiting_for_capture' | 'succeeded' | 'canceled
 const checkPaymentStatus = async (orderId: string): Promise<{ status: PaymentStatus; error?: string }> => {
     try {
         console.log('Payment Status: Checking payment in database for orderId:', orderId);
-        const dbPayment = await prisma.payment.findUnique({
-            where: { tempPaymentId: orderId },
+        
+        // Ищем платеж по tempPaymentId или paymentId
+        const dbPayment = await prisma.payment.findFirst({
+            where: {
+                OR: [
+                    { tempPaymentId: orderId },
+                    { paymentId: orderId }
+                ]
+            },
             include: {
                 user: true
             }

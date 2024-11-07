@@ -29,13 +29,15 @@ export async function POST(request: Request) {
         const locale = referer.match(/\/(ru|en)\//) ? referer.match(/\/(ru|en)\//)?.[1] : 'ru';
         console.log('Payment Creation: Locale:', locale);
 
-        // Проверяем только платежи в процессе оплаты
+        // Проверяем все незавершенные платежи пользователя
         const activePayment = await prisma.payment.findFirst({
             where: {
                 user: {
                     email: session.user.email
                 },
-                status: 'waiting_for_capture'
+                status: {
+                    in: ['pending', 'waiting_for_capture']
+                }
             }
         });
 
@@ -113,6 +115,18 @@ export async function POST(request: Request) {
             console.log('Payment Creation: No confirmation URL received');
             throw new Error('Payment URL not received from YooKassa');
         }
+
+        // Очищаем старые незавершенные платежи пользователя
+        await prisma.payment.deleteMany({
+            where: {
+                user: {
+                    email: session.user.email
+                },
+                status: {
+                    in: ['pending', 'waiting_for_capture']
+                }
+            }
+        });
 
         // Сохраняем платеж в базе данных, используя tempPaymentId для хранения orderId
         console.log('\nPayment Creation: Saving payment to database');
