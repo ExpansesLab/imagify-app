@@ -38,7 +38,7 @@ const getPaymentWithRetry = async (checkout: YooCheckout, paymentId: string, att
 };
 
 // Функция для обновления кредитов пользователя
-const updateUserCredits = async (userEmail: string, credits: number): Promise<void> => {
+const updateUserCredits = async (userEmail: string, credits: number): Promise<boolean> => {
     try {
         await prisma.user.update({
             where: { email: userEmail },
@@ -49,9 +49,56 @@ const updateUserCredits = async (userEmail: string, credits: number): Promise<vo
             }
         });
         console.log('Payment Status: Credits updated successfully');
+        return true;
     } catch (error) {
         console.error('Payment Status: Error updating credits:', error);
-        throw error;
+        return false;
+    }
+};
+
+// Функция для проверки и обработки платежа
+const processPayment = async (orderId: string): Promise<{ status: PaymentStatus; error?: string }> => {
+    try {
+        const dbPayment = await prisma.payment.findUnique({
+            where: { tempPaymentId: orderId }
+        });
+
+        if (!dbPayment) {
+            console.log('Payment Status: Payment not found in database');
+            return { status: 'error', error: 'Payment not found' };
+        }
+
+        const checkout = new YooCheckout({
+            shopId: getYooKassaCredentials().shopId,
+            secretKey: getYooKassaCredentials().secretKey
+        });
+
+        console.log('Payment Status: Fetching payment details...');
+        const payment = await getPaymentWithRetry(checkout, dbPayment.paymentId);
+        console.log('Payment Status: Payment details received:', payment);
+
+        if (payment.status !== dbPayment.status) {
+            await prisma.payment.update({
+                where: { tempPaymentId: orderId },
+                data: { status: payment.status }
+            });
+        }
+
+        if (payment.status === 'succeeded' && payment.metadata?.userEmail && payment.metadata?.credits) {
+            const creditsUpdated = await updateUserCredits(
+                payment.metadata.userEmail,
+                Number(payment.metadata.credits)
+            );
+            
+            if (!creditsUpdated) {
+                return { status: 'error', error: 'Failed to update credits' };
+            }
+        }
+
+        return { status: payment.status };
+    } catch (error) {
+        console.error('Payment Status: Error processing payment:', error);
+        return { status: 'error', error: error instanceof Error ? error.message : 'Unknown error' };
     }
 };
 
@@ -72,7 +119,6 @@ export default async function PaymentStatusPage({
 }) {
     const t = await getTranslations("Payment");
     
-    // Получаем orderId из URL
     const orderId = searchParams.orderId;
     console.log('Payment Status: Checking order ID:', orderId);
     console.log('Payment Status: Current locale:', locale);
@@ -108,235 +154,105 @@ export default async function PaymentStatusPage({
         );
     }
 
-    try {
-        // Ищем платеж в базе данных по tempPaymentId (который содержит orderId)
-        const dbPayment = await prisma.payment.findUnique({
-            where: { tempPaymentId: orderId }
-        });
+    const { status, error } = await processPayment(orderId);
 
-        if (!dbPayment) {
-            console.log('Payment Status: Payment not found in database');
-            throw new Error('Payment not found');
-        }
+    if (status === 'succeeded') {
+        redirect(`/${locale}/profile`);
+    }
 
-        const checkout = new YooCheckout({
-            shopId: getYooKassaCredentials().shopId,
-            secretKey: getYooKassaCredentials().secretKey
-        });
+    const isPending = ['pending', 'waiting_for_capture'].includes(status);
 
-        // Получаем актуальный статус платежа из YooKassa
-        console.log('Payment Status: Fetching payment details...');
-        const payment = await getPaymentWithRetry(checkout, dbPayment.paymentId);
-        console.log('Payment Status: Payment details received:', payment);
+    return (
+        <main className="min-h-screen flex items-center justify-center px-4">
+            <div className="max-w-md w-full space-y-8 p-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
+                {isTestMode && (
+                    <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900 rounded-lg">
+                        <h3 className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                            {t("status.testMode.title")}
+                        </h3>
+                        <div className="mt-2 text-sm text-blue-700 dark:text-blue-300">
+                            <p className="mb-2">{t("status.testMode.description")}</p>
+                            <ul className="list-disc pl-5 space-y-1">
+                                <li>
+                                    {t("status.testMode.successCard")}: {yookassaConfig.testCards.success.number}
+                                </li>
+                                <li>
+                                    {t("status.testMode.failureCard")}: {yookassaConfig.testCards.failure.number}
+                                </li>
+                                <li>
+                                    {t("status.testMode.threeDSecureCard")}: {yookassaConfig.testCards.threeDSecure.number}
+                                </li>
+                            </ul>
+                            <p className="mt-2">
+                                {t("status.testMode.cardInfo")}:<br />
+                                {t("status.testMode.expiryDate")}: {yookassaConfig.testCards.success.expiry}<br />
+                                CVC: {yookassaConfig.testCards.success.cvc}
+                            </p>
+                        </div>
+                    </div>
+                )}
 
-        // Если статус изменился, обновляем его в базе данных
-        if (payment.status !== dbPayment.status) {
-            await prisma.payment.update({
-                where: { tempPaymentId: orderId },
-                data: { status: payment.status }
-            });
-        }
-
-        // Если платеж успешен, обновляем кредиты и делаем редирект
-        if (payment.status === 'succeeded') {
-            console.log('Payment Status: Payment succeeded');
-
-            if (payment.metadata?.userEmail && payment.metadata?.credits) {
-                try {
-                    // Обновляем кредиты пользователя
-                    await updateUserCredits(
-                        payment.metadata.userEmail,
-                        Number(payment.metadata.credits)
-                    );
-                    
-                    // После успешного обновления кредитов делаем редирект
-                    redirect(`/${locale}/profile`);
-                } catch (error) {
-                    console.error('Payment Status: Failed to update credits:', error);
-                    // В случае ошибки обновления кредитов показываем сообщение об ошибке
-                    return (
-                        <main className="min-h-screen flex items-center justify-center px-4">
-                            <div className="max-w-md w-full space-y-8 p-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
-                                <div className="text-center">
-                                    <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-900">
-                                        <svg className="h-6 w-6 text-red-600 dark:text-red-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                                        </svg>
-                                    </div>
-                                    <h2 className="mt-6 text-3xl font-extrabold text-gray-900 dark:text-white">
-                                        {t("status.error.title")}
-                                    </h2>
-                                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
-                                        {t("status.error.description")}
-                                    </p>
-                                    <div className="mt-8">
-                                        <a
-                                            href={`/${locale}/profile`}
-                                            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                                        >
-                                            {t("status.goToProfile")}
-                                        </a>
-                                    </div>
-                                </div>
-                            </div>
-                        </main>
-                    );
-                }
-            }
-
-            return (
-                <main className="min-h-screen flex items-center justify-center px-4">
-                    <div className="max-w-md w-full space-y-8 p-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
-                        <div className="text-center">
-                            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 dark:bg-green-900">
-                                <svg className="h-6 w-6 text-green-600 dark:text-green-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                <div className="text-center">
+                    {isPending ? (
+                        <>
+                            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-yellow-100 dark:bg-yellow-900">
+                                <svg className="h-6 w-6 text-yellow-600 dark:text-yellow-300 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                 </svg>
                             </div>
                             <h2 className="mt-6 text-3xl font-extrabold text-gray-900 dark:text-white">
-                                {t("status.success.title")}
+                                {t("status.pending.title")}
                             </h2>
                             <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
-                                {t("status.success.description")}
+                                {t("status.pending.description")}
                             </p>
-                            <div className="mt-8">
-                                <a
-                                    href={`/${locale}/profile`}
-                                    className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                                >
-                                    {t("status.goToProfile")}
-                                </a>
+                            <script
+                                dangerouslySetInnerHTML={{
+                                    __html: `
+                                        setTimeout(function() {
+                                            window.location.reload();
+                                        }, 3000);
+                                    `
+                                }}
+                            />
+                        </>
+                    ) : (
+                        <>
+                            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-900">
+                                <svg className="h-6 w-6 text-red-600 dark:text-red-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
                             </div>
-                        </div>
-                    </div>
-                </main>
-            );
-        }
-
-        const isPending = ['pending', 'waiting_for_capture'].includes(payment.status);
-
-        return (
-            <main className="min-h-screen flex items-center justify-center px-4">
-                <div className="max-w-md w-full space-y-8 p-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
-                    {isTestMode && (
-                        <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900 rounded-lg">
-                            <h3 className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                                {t("status.testMode.title")}
-                            </h3>
-                            <div className="mt-2 text-sm text-blue-700 dark:text-blue-300">
-                                <p className="mb-2">{t("status.testMode.description")}</p>
-                                <ul className="list-disc pl-5 space-y-1">
-                                    <li>
-                                        {t("status.testMode.successCard")}: {yookassaConfig.testCards.success.number}
-                                    </li>
-                                    <li>
-                                        {t("status.testMode.failureCard")}: {yookassaConfig.testCards.failure.number}
-                                    </li>
-                                    <li>
-                                        {t("status.testMode.threeDSecureCard")}: {yookassaConfig.testCards.threeDSecure.number}
-                                    </li>
-                                </ul>
-                                <p className="mt-2">
-                                    {t("status.testMode.cardInfo")}:<br />
-                                    {t("status.testMode.expiryDate")}: {yookassaConfig.testCards.success.expiry}<br />
-                                    CVC: {yookassaConfig.testCards.success.cvc}
-                                </p>
-                            </div>
-                        </div>
+                            <h2 className="mt-6 text-3xl font-extrabold text-gray-900 dark:text-white">
+                                {t("status.error.title")}
+                            </h2>
+                            <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                                {error || t("status.error.description")}
+                            </p>
+                        </>
                     )}
+                </div>
 
-                    <div className="text-center">
-                        {isPending ? (
-                            <>
-                                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-yellow-100 dark:bg-yellow-900">
-                                    <svg className="h-6 w-6 text-yellow-600 dark:text-yellow-300 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                    </svg>
-                                </div>
-                                <h2 className="mt-6 text-3xl font-extrabold text-gray-900 dark:text-white">
-                                    {t("status.pending.title")}
-                                </h2>
-                                <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
-                                    {t("status.pending.description")}
-                                </p>
-                                <script
-                                    dangerouslySetInnerHTML={{
-                                        __html: `
-                                            setTimeout(function() {
-                                                window.location.reload();
-                                            }, 3000);
-                                        `
-                                    }}
-                                />
-                            </>
-                        ) : (
-                            <>
-                                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-900">
-                                    <svg className="h-6 w-6 text-red-600 dark:text-red-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                </div>
-                                <h2 className="mt-6 text-3xl font-extrabold text-gray-900 dark:text-white">
-                                    {t("status.error.title")}
-                                </h2>
-                                <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
-                                    {t("status.error.description")}
-                                </p>
-                            </>
-                        )}
-                    </div>
+                <div className="mt-8">
+                    <a
+                        href={`/${locale}/profile`}
+                        className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                        {t("status.goToProfile")}
+                    </a>
+                </div>
 
-                    <div className="mt-8">
+                {isTestMode && (
+                    <div className="mt-4 text-center">
                         <a
-                            href={`/${locale}/profile`}
-                            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                            href={`/${locale}/pricing`}
+                            className="text-sm text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
                         >
-                            {t("status.goToProfile")}
+                            {t("status.backToPricing")}
                         </a>
                     </div>
-
-                    {isTestMode && (
-                        <div className="mt-4 text-center">
-                            <a
-                                href={`/${locale}/pricing`}
-                                className="text-sm text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
-                            >
-                                {t("status.backToPricing")}
-                            </a>
-                        </div>
-                    )}
-                </div>
-            </main>
-        );
-    } catch (error) {
-        console.error('Payment Status: Error fetching payment status:', error);
-        
-        return (
-            <main className="min-h-screen flex items-center justify-center px-4">
-                <div className="max-w-md w-full space-y-8 p-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
-                    <div className="text-center">
-                        <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-yellow-100 dark:bg-yellow-900">
-                            <svg className="h-6 w-6 text-yellow-600 dark:text-yellow-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                        </div>
-                        <h2 className="mt-6 text-3xl font-extrabold text-gray-900 dark:text-white">
-                            {t("status.pending.title")}
-                        </h2>
-                        <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
-                            {t("status.pending.description")}
-                        </p>
-                        <div className="mt-8">
-                            <a
-                                href={`/${locale}/profile`}
-                                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                            >
-                                {t("status.goToProfile")}
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </main>
-        );
-    }
+                )}
+            </div>
+        </main>
+    );
 }
