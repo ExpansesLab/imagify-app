@@ -2,15 +2,24 @@ import { getTranslations } from "next-intl/server";
 import { redirect } from "next/navigation";
 import { getYooKassaCredentials, yookassaConfig, isTestMode } from "@/config/yookassa";
 import prisma from "@/lib/prisma";
+import { YooCheckout } from '@a2seven/yoo-checkout';
 
 type PaymentStatus = 'pending' | 'waiting_for_capture' | 'succeeded' | 'canceled' | 'error';
+
+const getCheckoutInstance = () => {
+    const credentials = getYooKassaCredentials();
+    return new YooCheckout({
+        shopId: credentials.shopId,
+        secretKey: credentials.secretKey
+    });
+};
 
 // Функция для проверки статуса платежа
 const checkPaymentStatus = async (orderId: string): Promise<{ status: PaymentStatus; error?: string }> => {
     try {
         console.log('Payment Status: Checking payment in database for orderId:', orderId);
         
-        // Ищем платеж только по tempPaymentId, так как orderId всегда сохраняется в этом поле
+        // Ищем платеж по tempPaymentId
         const dbPayment = await prisma.payment.findUnique({
             where: {
                 tempPaymentId: orderId
@@ -26,7 +35,42 @@ const checkPaymentStatus = async (orderId: string): Promise<{ status: PaymentSta
         }
 
         console.log('Payment Status: Found payment:', JSON.stringify(dbPayment, null, 2));
-        return { status: dbPayment.status as PaymentStatus };
+
+        // Проверяем статус платежа напрямую через API YooKassa
+        try {
+            const checkout = getCheckoutInstance();
+            console.log('Payment Status: Checking payment status in YooKassa for payment ID:', dbPayment.paymentId);
+            const yooKassaPayment = await checkout.getPayment(dbPayment.paymentId);
+            console.log('Payment Status: YooKassa payment status:', yooKassaPayment.status);
+
+            // Если статус в YooKassa отличается от статуса в БД, обновляем статус в БД
+            if (yooKassaPayment.status !== dbPayment.status) {
+                console.log('Payment Status: Updating payment status in database from', dbPayment.status, 'to', yooKassaPayment.status);
+                await prisma.payment.update({
+                    where: { id: dbPayment.id },
+                    data: { status: yooKassaPayment.status }
+                });
+
+                // Если платеж успешен, начисляем кредиты пользователю
+                if (yooKassaPayment.status === 'succeeded' && yooKassaPayment.metadata) {
+                    const { credits } = yooKassaPayment.metadata;
+                    await prisma.user.update({
+                        where: { id: dbPayment.userId },
+                        data: {
+                            credits: {
+                                increment: Number(credits)
+                            }
+                        }
+                    });
+                }
+            }
+
+            return { status: yooKassaPayment.status as PaymentStatus };
+        } catch (yooKassaError) {
+            console.error('Payment Status: Error checking YooKassa status:', yooKassaError);
+            // Если не удалось получить статус из YooKassa, возвращаем статус из БД
+            return { status: dbPayment.status as PaymentStatus };
+        }
     } catch (error) {
         console.error('Payment Status: Error checking payment:', error);
         return { status: 'error', error: error instanceof Error ? error.message : 'Unknown error' };
