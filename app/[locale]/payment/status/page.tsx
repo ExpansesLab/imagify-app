@@ -10,7 +10,10 @@ const checkPaymentStatus = async (orderId: string): Promise<{ status: PaymentSta
     try {
         console.log('Payment Status: Checking payment in database for orderId:', orderId);
         const dbPayment = await prisma.payment.findUnique({
-            where: { tempPaymentId: orderId }
+            where: { tempPaymentId: orderId },
+            include: {
+                user: true
+            }
         });
 
         if (!dbPayment) {
@@ -18,7 +21,7 @@ const checkPaymentStatus = async (orderId: string): Promise<{ status: PaymentSta
             return { status: 'error', error: 'Payment not found' };
         }
 
-        console.log('Payment Status: Found payment with status:', dbPayment.status);
+        console.log('Payment Status: Found payment:', JSON.stringify(dbPayment, null, 2));
         return { status: dbPayment.status as PaymentStatus };
     } catch (error) {
         console.error('Payment Status: Error checking payment:', error);
@@ -135,7 +138,7 @@ export default async function PaymentStatusPage({
                                     __html: `
                                         setTimeout(function() {
                                             window.location.reload();
-                                        }, 5000); // Увеличили интервал до 5 секунд
+                                        }, 5000);
                                     `
                                 }}
                             />
