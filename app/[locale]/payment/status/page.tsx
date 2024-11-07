@@ -8,6 +8,7 @@ type PaymentStatus = 'pending' | 'waiting_for_capture' | 'succeeded' | 'canceled
 // Функция для проверки статуса платежа
 const checkPaymentStatus = async (orderId: string): Promise<{ status: PaymentStatus; error?: string }> => {
     try {
+        console.log('Payment Status: Checking payment in database for orderId:', orderId);
         const dbPayment = await prisma.payment.findUnique({
             where: { tempPaymentId: orderId }
         });
@@ -17,6 +18,7 @@ const checkPaymentStatus = async (orderId: string): Promise<{ status: PaymentSta
             return { status: 'error', error: 'Payment not found' };
         }
 
+        console.log('Payment Status: Found payment with status:', dbPayment.status);
         return { status: dbPayment.status as PaymentStatus };
     } catch (error) {
         console.error('Payment Status: Error checking payment:', error);
@@ -133,7 +135,7 @@ export default async function PaymentStatusPage({
                                     __html: `
                                         setTimeout(function() {
                                             window.location.reload();
-                                        }, 3000);
+                                        }, 5000); // Увеличили интервал до 5 секунд
                                     `
                                 }}
                             />

@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { yookassaConfig, getYooKassaCredentials } from '@/config/yookassa';
 import crypto from 'crypto';
 import { headers } from 'next/headers';
+import prisma from '@/lib/prisma';
 
 const getCheckoutInstance = () => {
     const credentials = getYooKassaCredentials();
@@ -14,9 +15,11 @@ const getCheckoutInstance = () => {
 };
 
 export async function POST(request: Request) {
+    console.log('\n=== Payment Creation Started ===');
     try {
         const session = await getServerSession();
         if (!session?.user?.email) {
+            console.log('Payment Creation: Unauthorized request');
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
@@ -24,17 +27,21 @@ export async function POST(request: Request) {
         const headersList = headers();
         const referer = headersList.get('referer') || '';
         const locale = referer.match(/\/(ru|en)\//) ? referer.match(/\/(ru|en)\//)?.[1] : 'ru';
+        console.log('Payment Creation: Locale:', locale);
 
         const body = await request.json();
         const { planId } = body;
+        console.log('Payment Creation: Plan ID:', planId);
 
         const plan = yookassaConfig.plans[planId as keyof typeof yookassaConfig.plans];
         if (!plan) {
+            console.log('Payment Creation: Invalid plan ID');
             return NextResponse.json({ error: 'Invalid plan' }, { status: 400 });
         }
 
         // Генерируем orderId заранее
         const orderId = crypto.randomUUID();
+        console.log('Payment Creation: Generated Order ID:', orderId);
 
         const idempotenceKey = crypto.randomUUID();
         const checkout = getCheckoutInstance();
@@ -78,21 +85,23 @@ export async function POST(request: Request) {
         };
 
         // Логируем данные платежа для отладки
-        console.log('Creating payment with payload:', JSON.stringify(paymentData, null, 2));
+        console.log('\nPayment Creation: Payment data:', JSON.stringify(paymentData, null, 2));
 
         // Создаем платеж
         const payment = await checkout.createPayment(paymentData, idempotenceKey);
-        console.log('Payment created:', JSON.stringify(payment, null, 2));
+        console.log('\nPayment Creation: Payment created:', JSON.stringify(payment, null, 2));
 
         if (!payment.confirmation?.confirmation_url) {
+            console.log('Payment Creation: No confirmation URL received');
             throw new Error('Payment URL not received from YooKassa');
         }
 
         // Сохраняем платеж в базе данных, используя tempPaymentId для хранения orderId
-        await prisma.payment.create({
+        console.log('\nPayment Creation: Saving payment to database');
+        const dbPayment = await prisma.payment.create({
             data: {
                 paymentId: payment.id,
-                tempPaymentId: orderId, // Используем tempPaymentId вместо orderId
+                tempPaymentId: orderId,
                 amount: Number(payment.amount.value),
                 currency: payment.amount.currency,
                 status: payment.status,
@@ -104,7 +113,9 @@ export async function POST(request: Request) {
                 }
             }
         });
+        console.log('Payment Creation: Payment saved to database:', JSON.stringify(dbPayment, null, 2));
 
+        console.log('\nPayment Creation: Process completed successfully');
         return NextResponse.json({
             paymentUrl: payment.confirmation.confirmation_url,
             paymentId: payment.id,
@@ -113,7 +124,7 @@ export async function POST(request: Request) {
             testCards: process.env.NODE_ENV !== 'production' ? yookassaConfig.testCards : undefined
         });
     } catch (error) {
-        console.error('Payment creation error:', error);
+        console.error('\nPayment Creation Error:', error);
         
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         const errorDetails = error instanceof Error && (error as any).response?.data 
