@@ -10,13 +10,10 @@ const checkPaymentStatus = async (orderId: string): Promise<{ status: PaymentSta
     try {
         console.log('Payment Status: Checking payment in database for orderId:', orderId);
         
-        // Ищем платеж по tempPaymentId или paymentId
-        const dbPayment = await prisma.payment.findFirst({
+        // Ищем платеж только по tempPaymentId, так как orderId всегда сохраняется в этом поле
+        const dbPayment = await prisma.payment.findUnique({
             where: {
-                OR: [
-                    { tempPaymentId: orderId },
-                    { paymentId: orderId }
-                ]
+                tempPaymentId: orderId
             },
             include: {
                 user: true

@@ -58,6 +58,7 @@ export async function POST(request: Request) {
         console.log('\nWebhook: Getting payment details for ID:', event.object.id);
         const payment = await checkout.getPayment(event.object.id);
         console.log('\nWebhook: Payment details:', JSON.stringify(payment, null, 2));
+        console.log('\nWebhook: Payment metadata:', JSON.stringify(payment.metadata, null, 2));
 
         // Сначала пробуем найти платеж в базе данных
         const existingPayment = await prisma.payment.findFirst({
@@ -69,6 +70,10 @@ export async function POST(request: Request) {
             }
         });
 
+        console.log('\nWebhook: Search criteria:', JSON.stringify({
+            paymentId: payment.id,
+            tempPaymentId: payment.metadata?.orderId
+        }, null, 2));
         console.log('\nWebhook: Existing payment in database:', JSON.stringify(existingPayment, null, 2));
 
         if (!existingPayment) {
@@ -77,11 +82,12 @@ export async function POST(request: Request) {
         }
 
         if (payment.status === 'succeeded' && payment.metadata) {
-            const { userEmail, credits, planId } = payment.metadata;
+            const { userEmail, credits, planId, orderId } = payment.metadata;
             console.log('\nWebhook: Processing successful payment');
             console.log('Webhook: User email:', userEmail);
             console.log('Webhook: Credits to add:', credits);
             console.log('Webhook: Plan ID:', planId);
+            console.log('Webhook: Order ID:', orderId);
             console.log('Webhook: Payment ID:', payment.id);
 
             try {
