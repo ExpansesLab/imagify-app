@@ -22,7 +22,7 @@ export async function POST(request: Request) {
         // Проверяем, что платеж принадлежит текущему пользователю и находится в нужном статусе
         const payment = await prisma.payment.findFirst({
             where: {
-                tempPaymentId: paymentId, // Ищем только по tempPaymentId
+                tempPaymentId: paymentId, // Ищем только по tempPaymentId, так как это orderId
                 user: {
                     email: session.user.email
                 },

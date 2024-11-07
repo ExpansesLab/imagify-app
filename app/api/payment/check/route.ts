@@ -30,7 +30,7 @@ export async function GET() {
         return NextResponse.json({
             exists: true,
             payment: {
-                id: payment.paymentId,
+                id: payment.tempPaymentId, // Изменено с paymentId на tempPaymentId
                 amount: payment.amount,
                 currency: payment.currency,
                 status: payment.status,
