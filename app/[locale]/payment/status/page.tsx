@@ -17,6 +17,7 @@ interface Payment {
         userEmail?: string;
         credits?: number;
         planId?: string;
+        orderId?: string;
     };
 }
 
@@ -53,13 +54,13 @@ export default async function PaymentStatusPage({
 }) {
     const t = await getTranslations("Payment");
     
-    // Получаем paymentId из URL
-    const paymentId = searchParams.orderId;
-    console.log('Payment Status: Checking payment ID:', paymentId);
+    // Получаем orderId из URL
+    const orderId = searchParams.orderId;
+    console.log('Payment Status: Checking order ID:', orderId);
     console.log('Payment Status: Current locale:', locale);
 
-    if (!paymentId) {
-        console.log('Payment Status: No payment ID provided');
+    if (!orderId) {
+        console.log('Payment Status: No order ID provided');
         return (
             <main className="min-h-screen flex items-center justify-center px-4">
                 <div className="max-w-md w-full space-y-8 p-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
@@ -90,14 +91,37 @@ export default async function PaymentStatusPage({
     }
 
     try {
-        // Проверяем статус платежа в базе данных
+        // Ищем платеж в базе данных по orderId
         const dbPayment = await prisma.payment.findUnique({
-            where: { paymentId }
+            where: { orderId }
         });
 
-        // Если платеж найден в базе и статус succeeded, показываем страницу успеха
-        if (dbPayment?.status === 'succeeded') {
-            console.log('Payment Status: Payment found in database with succeeded status');
+        if (!dbPayment) {
+            console.log('Payment Status: Payment not found in database');
+            throw new Error('Payment not found');
+        }
+
+        const checkout = new YooCheckout({
+            shopId: getYooKassaCredentials().shopId,
+            secretKey: getYooKassaCredentials().secretKey
+        });
+
+        // Получаем актуальный статус платежа из YooKassa
+        console.log('Payment Status: Fetching payment details...');
+        const payment = await getPaymentWithRetry(checkout, dbPayment.paymentId);
+        console.log('Payment Status: Payment details received:', payment);
+
+        // Если статус изменился, обновляем его в базе данных
+        if (payment.status !== dbPayment.status) {
+            await prisma.payment.update({
+                where: { orderId },
+                data: { status: payment.status }
+            });
+        }
+
+        // Если платеж успешен, показываем страницу успеха
+        if (payment.status === 'succeeded') {
+            console.log('Payment Status: Payment succeeded');
             return (
                 <main className="min-h-screen flex items-center justify-center px-4">
                     <div className="max-w-md w-full space-y-8 p-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
@@ -126,20 +150,6 @@ export default async function PaymentStatusPage({
             );
         }
 
-        const checkout = new YooCheckout({
-            shopId: getYooKassaCredentials().shopId,
-            secretKey: getYooKassaCredentials().secretKey
-        });
-
-        console.log('Payment Status: Fetching payment details...');
-        const payment = await getPaymentWithRetry(checkout, paymentId);
-        console.log('Payment Status: Payment details received:', payment);
-
-        if (!payment) {
-            throw new Error('Payment not found');
-        }
-
-        const isSuccess = payment.status === 'succeeded';
         const isPending = ['pending', 'waiting_for_capture'].includes(payment.status);
 
         return (

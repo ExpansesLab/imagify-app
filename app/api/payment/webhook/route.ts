@@ -53,7 +53,7 @@ export async function POST(request: Request) {
         console.log('Webhook: Payment details:', JSON.stringify(payment, null, 2));
 
         if (payment.status === 'succeeded' && payment.metadata) {
-            const { userEmail, credits, planId } = payment.metadata;
+            const { userEmail, credits, planId, orderId } = payment.metadata;
             console.log('Webhook: Processing payment for user:', userEmail);
 
             try {
@@ -68,22 +68,14 @@ export async function POST(request: Request) {
                 });
                 console.log('Webhook: Updated user credits:', updatedUser);
 
-                // Сохраняем информацию о платеже
-                const savedPayment = await prisma.payment.create({
+                // Обновляем статус платежа в базе данных
+                const updatedPayment = await prisma.payment.update({
+                    where: { orderId },
                     data: {
-                        paymentId: payment.id,
-                        amount: Number(payment.amount.value),
-                        currency: payment.amount.currency,
-                        status: payment.status,
-                        planId: planId,
-                        user: {
-                            connect: {
-                                email: userEmail
-                            }
-                        }
+                        status: payment.status
                     }
                 });
-                console.log('Webhook: Saved payment record:', savedPayment);
+                console.log('Webhook: Updated payment status:', updatedPayment);
 
             } catch (dbError) {
                 console.error('Webhook: Database operation failed:', dbError);
@@ -93,6 +85,17 @@ export async function POST(request: Request) {
             console.log(`Webhook: Payment ${payment.id} processed successfully in ${process.env.NODE_ENV} mode`);
         } else {
             console.log(`Webhook: Payment ${payment.id} status: ${payment.status} (not succeeded)`);
+            
+            // Обновляем статус платежа в базе данных, даже если он не succeeded
+            if (payment.metadata?.orderId) {
+                await prisma.payment.update({
+                    where: { orderId: payment.metadata.orderId },
+                    data: {
+                        status: payment.status
+                    }
+                });
+                console.log('Webhook: Updated payment status in database');
+            }
         }
 
         return NextResponse.json({ status: 'ok' });

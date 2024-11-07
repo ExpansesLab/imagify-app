@@ -33,6 +33,9 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Invalid plan' }, { status: 400 });
         }
 
+        // Генерируем orderId заранее
+        const orderId = crypto.randomUUID();
+
         const idempotenceKey = crypto.randomUUID();
         const checkout = getCheckoutInstance();
 
@@ -44,15 +47,16 @@ export async function POST(request: Request) {
             },
             confirmation: {
                 type: 'redirect',
-                // URL возврата будет установлен после создания платежа
-                return_url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001'}/${locale}/payment/status`
+                // Добавляем orderId в URL возврата
+                return_url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://imagify.ru'}/${locale}/payment/status?orderId=${orderId}`
             },
             capture: yookassaConfig.capture,
             description: plan.description,
             metadata: {
                 planId,
                 userEmail: session.user.email,
-                credits: plan.credits
+                credits: plan.credits,
+                orderId // Сохраняем orderId в метаданных
             },
             receipt: {
                 customer: {
@@ -84,14 +88,27 @@ export async function POST(request: Request) {
             throw new Error('Payment URL not received from YooKassa');
         }
 
-        // Добавляем paymentId в URL возврата
-        const returnUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001'}/${locale}/payment/status?orderId=${payment.id}`;
-        const confirmationUrl = new URL(payment.confirmation.confirmation_url);
-        confirmationUrl.searchParams.set('return_url', returnUrl);
+        // Сохраняем связь orderId и paymentId в базе данных
+        await prisma.payment.create({
+            data: {
+                paymentId: payment.id,
+                orderId: orderId,
+                amount: Number(payment.amount.value),
+                currency: payment.amount.currency,
+                status: payment.status,
+                planId: planId,
+                user: {
+                    connect: {
+                        email: session.user.email
+                    }
+                }
+            }
+        });
 
         return NextResponse.json({
-            paymentUrl: confirmationUrl.toString(),
+            paymentUrl: payment.confirmation.confirmation_url,
             paymentId: payment.id,
+            orderId: orderId,
             testMode: process.env.NODE_ENV !== 'production',
             testCards: process.env.NODE_ENV !== 'production' ? yookassaConfig.testCards : undefined
         });
