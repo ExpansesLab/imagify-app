@@ -60,12 +60,12 @@ export async function POST(request: Request) {
         console.log('\nWebhook: Payment details:', JSON.stringify(payment, null, 2));
 
         if (payment.status === 'succeeded' && payment.metadata) {
-            const { userEmail, credits, planId, orderId } = payment.metadata;
+            const { userEmail, credits, planId } = payment.metadata;
             console.log('\nWebhook: Processing successful payment');
             console.log('Webhook: User email:', userEmail);
             console.log('Webhook: Credits to add:', credits);
             console.log('Webhook: Plan ID:', planId);
-            console.log('Webhook: Order ID:', orderId);
+            console.log('Webhook: Payment ID:', payment.id);
 
             try {
                 // Обновляем количество кредитов пользователя
@@ -79,9 +79,9 @@ export async function POST(request: Request) {
                 });
                 console.log('\nWebhook: Updated user credits:', JSON.stringify(updatedUser, null, 2));
 
-                // Обновляем статус платежа в базе данных, используя tempPaymentId
+                // Обновляем статус платежа в базе данных, используя paymentId вместо tempPaymentId
                 const updatedPayment = await prisma.payment.update({
-                    where: { tempPaymentId: orderId },
+                    where: { paymentId: payment.id },
                     data: {
                         status: payment.status
                     }
@@ -98,15 +98,13 @@ export async function POST(request: Request) {
             console.log(`\nWebhook: Payment ${payment.id} status: ${payment.status} (not succeeded)`);
             
             // Обновляем статус платежа в базе данных, даже если он не succeeded
-            if (payment.metadata?.orderId) {
-                const updatedPayment = await prisma.payment.update({
-                    where: { tempPaymentId: payment.metadata.orderId },
-                    data: {
-                        status: payment.status
-                    }
-                });
-                console.log('\nWebhook: Updated payment status in database:', JSON.stringify(updatedPayment, null, 2));
-            }
+            const updatedPayment = await prisma.payment.update({
+                where: { paymentId: payment.id },
+                data: {
+                    status: payment.status
+                }
+            });
+            console.log('\nWebhook: Updated payment status in database:', JSON.stringify(updatedPayment, null, 2));
         }
 
         console.log('\nWebhook: Processing completed successfully');
