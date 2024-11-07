@@ -41,9 +41,14 @@ export default function BuyCreditsButton({ planId, className, children }: BuyCre
             if (data.exists && data.payment) {
                 setExistingPayment(data.payment);
                 setShowModal(true);
+            } else {
+                // Если платеж не найден, очищаем состояние
+                setExistingPayment(null);
+                setShowModal(false);
             }
         } catch (error) {
             console.error('Error checking existing payment:', error);
+            setError('Ошибка при проверке платежа');
         }
     }, []); // Нет зависимостей, так как функция не использует внешние переменные
 
@@ -116,8 +121,12 @@ export default function BuyCreditsButton({ planId, className, children }: BuyCre
                 throw new Error(data.message || data.error || 'Ошибка удаления платежа');
             }
 
+            // Сначала очищаем состояние и закрываем модальное окно
             setExistingPayment(null);
             setShowModal(false);
+
+            // После успешного удаления и очистки состояния проверяем статус платежа
+            await checkExistingPayment();
         } catch (error) {
             console.error('Payment deletion error:', error);
             setError(error instanceof Error ? error.message : 'Произошла ошибка при удалении платежа');
@@ -163,14 +172,14 @@ export default function BuyCreditsButton({ planId, className, children }: BuyCre
                                 className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-md"
                                 disabled={isLoading}
                             >
-                                Продолжить оплату
+                                {isLoading ? 'Загрузка...' : 'Продолжить оплату'}
                             </button>
                             <button
                                 onClick={handleDeletePayment}
                                 className="w-full py-2 px-4 bg-red-600 hover:bg-red-700 text-white rounded-md"
                                 disabled={isLoading}
                             >
-                                Удалить платеж
+                                {isLoading ? 'Загрузка...' : 'Удалить платеж'}
                             </button>
                             <button
                                 onClick={() => setShowModal(false)}
@@ -180,6 +189,11 @@ export default function BuyCreditsButton({ planId, className, children }: BuyCre
                                 Закрыть
                             </button>
                         </div>
+                        {error && (
+                            <div className="mt-4 text-red-500 text-sm text-center">
+                                {error}
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
