@@ -37,6 +37,24 @@ const getPaymentWithRetry = async (checkout: YooCheckout, paymentId: string, att
     throw new Error('Failed to get payment after retries');
 };
 
+// Функция для обновления кредитов пользователя
+const updateUserCredits = async (userEmail: string, credits: number): Promise<void> => {
+    try {
+        await prisma.user.update({
+            where: { email: userEmail },
+            data: {
+                credits: {
+                    increment: credits
+                }
+            }
+        });
+        console.log('Payment Status: Credits updated successfully');
+    } catch (error) {
+        console.error('Payment Status: Error updating credits:', error);
+        throw error;
+    }
+};
+
 export async function generateMetadata() {
     const t = await getTranslations("Payment");
     return {
@@ -119,9 +137,53 @@ export default async function PaymentStatusPage({
             });
         }
 
-        // Если платеж успешен, показываем страницу успеха
+        // Если платеж успешен, обновляем кредиты и делаем редирект
         if (payment.status === 'succeeded') {
             console.log('Payment Status: Payment succeeded');
+
+            if (payment.metadata?.userEmail && payment.metadata?.credits) {
+                try {
+                    // Обновляем кредиты пользователя
+                    await updateUserCredits(
+                        payment.metadata.userEmail,
+                        Number(payment.metadata.credits)
+                    );
+                    
+                    // После успешного обновления кредитов делаем редирект
+                    redirect(`/${locale}/profile`);
+                } catch (error) {
+                    console.error('Payment Status: Failed to update credits:', error);
+                    // В случае ошибки обновления кредитов показываем сообщение об ошибке
+                    return (
+                        <main className="min-h-screen flex items-center justify-center px-4">
+                            <div className="max-w-md w-full space-y-8 p-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
+                                <div className="text-center">
+                                    <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-900">
+                                        <svg className="h-6 w-6 text-red-600 dark:text-red-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                    </div>
+                                    <h2 className="mt-6 text-3xl font-extrabold text-gray-900 dark:text-white">
+                                        {t("status.error.title")}
+                                    </h2>
+                                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                                        {t("status.error.description")}
+                                    </p>
+                                    <div className="mt-8">
+                                        <a
+                                            href={`/${locale}/profile`}
+                                            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                        >
+                                            {t("status.goToProfile")}
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </main>
+                    );
+                }
+            }
+
             return (
                 <main className="min-h-screen flex items-center justify-center px-4">
                     <div className="max-w-md w-full space-y-8 p-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
@@ -137,13 +199,14 @@ export default async function PaymentStatusPage({
                             <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
                                 {t("status.success.description")}
                             </p>
-                            <script
-                                dangerouslySetInnerHTML={{
-                                    __html: `
-                                        window.location.href = "/${locale}/profile";
-                                    `
-                                }}
-                            />
+                            <div className="mt-8">
+                                <a
+                                    href={`/${locale}/profile`}
+                                    className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                >
+                                    {t("status.goToProfile")}
+                                </a>
+                            </div>
                         </div>
                     </div>
                 </main>
