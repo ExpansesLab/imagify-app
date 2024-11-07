@@ -29,6 +29,40 @@ function checkSignature(body: string, signature: string | null): boolean {
     return isValid;
 }
 
+// Функция для обновления кредитов пользователя
+const updateUserCredits = async (userEmail: string, credits: number): Promise<boolean> => {
+    try {
+        await prisma.user.update({
+            where: { email: userEmail },
+            data: {
+                credits: {
+                    increment: credits
+                }
+            }
+        });
+        console.log('Webhook: Credits updated successfully for user:', userEmail);
+        return true;
+    } catch (error) {
+        console.error('Webhook: Error updating credits:', error);
+        return false;
+    }
+};
+
+// Функция для обновления статуса платежа
+const updatePaymentStatus = async (orderId: string, status: string): Promise<boolean> => {
+    try {
+        await prisma.payment.update({
+            where: { tempPaymentId: orderId },
+            data: { status }
+        });
+        console.log('Webhook: Payment status updated successfully for order:', orderId);
+        return true;
+    } catch (error) {
+        console.error('Webhook: Error updating payment status:', error);
+        return false;
+    }
+};
+
 export async function POST(request: Request) {
     console.log('Webhook: Received request');
     try {
@@ -52,50 +86,36 @@ export async function POST(request: Request) {
         const payment = await checkout.getPayment(event.object.id);
         console.log('Webhook: Payment details:', JSON.stringify(payment, null, 2));
 
+        // Всегда обновляем статус платежа в базе данных
+        if (payment.metadata?.orderId) {
+            const statusUpdated = await updatePaymentStatus(payment.metadata.orderId, payment.status);
+            if (!statusUpdated) {
+                console.error('Webhook: Failed to update payment status');
+                return NextResponse.json({ error: 'Failed to update payment status' }, { status: 500 });
+            }
+        } else {
+            console.error('Webhook: No orderId in payment metadata');
+            return NextResponse.json({ error: 'No orderId in payment metadata' }, { status: 400 });
+        }
+
+        // Обновляем кредиты только если платеж успешен
         if (payment.status === 'succeeded' && payment.metadata) {
-            const { userEmail, credits, planId, orderId } = payment.metadata;
-            console.log('Webhook: Processing payment for user:', userEmail);
+            const { userEmail, credits } = payment.metadata;
+            
+            if (!userEmail || !credits) {
+                console.error('Webhook: Missing required metadata fields');
+                return NextResponse.json({ error: 'Missing required metadata fields' }, { status: 400 });
+            }
 
-            try {
-                // Обновляем количество кредитов пользователя
-                const updatedUser = await prisma.user.update({
-                    where: { email: userEmail },
-                    data: {
-                        credits: {
-                            increment: Number(credits)
-                        }
-                    }
-                });
-                console.log('Webhook: Updated user credits:', updatedUser);
-
-                // Обновляем статус платежа в базе данных, используя tempPaymentId
-                const updatedPayment = await prisma.payment.update({
-                    where: { tempPaymentId: orderId },
-                    data: {
-                        status: payment.status
-                    }
-                });
-                console.log('Webhook: Updated payment status:', updatedPayment);
-
-            } catch (dbError) {
-                console.error('Webhook: Database operation failed:', dbError);
-                throw dbError;
+            const creditsUpdated = await updateUserCredits(userEmail, Number(credits));
+            if (!creditsUpdated) {
+                console.error('Webhook: Failed to update user credits');
+                return NextResponse.json({ error: 'Failed to update user credits' }, { status: 500 });
             }
 
             console.log(`Webhook: Payment ${payment.id} processed successfully in ${process.env.NODE_ENV} mode`);
         } else {
             console.log(`Webhook: Payment ${payment.id} status: ${payment.status} (not succeeded)`);
-            
-            // Обновляем статус платежа в базе данных, даже если он не succeeded
-            if (payment.metadata?.orderId) {
-                await prisma.payment.update({
-                    where: { tempPaymentId: payment.metadata.orderId },
-                    data: {
-                        status: payment.status
-                    }
-                });
-                console.log('Webhook: Updated payment status in database');
-            }
         }
 
         return NextResponse.json({ status: 'ok' });

@@ -1,63 +1,12 @@
 import { getTranslations } from "next-intl/server";
 import { redirect } from "next/navigation";
-import { YooCheckout } from '@a2seven/yoo-checkout';
 import { getYooKassaCredentials, yookassaConfig, isTestMode } from "@/config/yookassa";
 import prisma from "@/lib/prisma";
 
 type PaymentStatus = 'pending' | 'waiting_for_capture' | 'succeeded' | 'canceled' | 'error';
 
-interface Payment {
-    id: string;
-    status: PaymentStatus;
-    amount: {
-        value: string;
-        currency: string;
-    };
-    metadata?: {
-        userEmail?: string;
-        credits?: number;
-        planId?: string;
-        orderId?: string;
-    };
-}
-
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-const getPaymentWithRetry = async (checkout: YooCheckout, paymentId: string, attempts: number = 3): Promise<Payment> => {
-    for (let i = 0; i < attempts; i++) {
-        try {
-            await delay(1000);
-            const payment = await checkout.getPayment(paymentId);
-            return payment as Payment;
-        } catch (error) {
-            if (i === attempts - 1) throw error;
-            await delay(1000);
-        }
-    }
-    throw new Error('Failed to get payment after retries');
-};
-
-// Функция для обновления кредитов пользователя
-const updateUserCredits = async (userEmail: string, credits: number): Promise<boolean> => {
-    try {
-        await prisma.user.update({
-            where: { email: userEmail },
-            data: {
-                credits: {
-                    increment: credits
-                }
-            }
-        });
-        console.log('Payment Status: Credits updated successfully');
-        return true;
-    } catch (error) {
-        console.error('Payment Status: Error updating credits:', error);
-        return false;
-    }
-};
-
-// Функция для проверки и обработки платежа
-const processPayment = async (orderId: string): Promise<{ status: PaymentStatus; error?: string }> => {
+// Функция для проверки статуса платежа
+const checkPaymentStatus = async (orderId: string): Promise<{ status: PaymentStatus; error?: string }> => {
     try {
         const dbPayment = await prisma.payment.findUnique({
             where: { tempPaymentId: orderId }
@@ -68,36 +17,9 @@ const processPayment = async (orderId: string): Promise<{ status: PaymentStatus;
             return { status: 'error', error: 'Payment not found' };
         }
 
-        const checkout = new YooCheckout({
-            shopId: getYooKassaCredentials().shopId,
-            secretKey: getYooKassaCredentials().secretKey
-        });
-
-        console.log('Payment Status: Fetching payment details...');
-        const payment = await getPaymentWithRetry(checkout, dbPayment.paymentId);
-        console.log('Payment Status: Payment details received:', payment);
-
-        if (payment.status !== dbPayment.status) {
-            await prisma.payment.update({
-                where: { tempPaymentId: orderId },
-                data: { status: payment.status }
-            });
-        }
-
-        if (payment.status === 'succeeded' && payment.metadata?.userEmail && payment.metadata?.credits) {
-            const creditsUpdated = await updateUserCredits(
-                payment.metadata.userEmail,
-                Number(payment.metadata.credits)
-            );
-            
-            if (!creditsUpdated) {
-                return { status: 'error', error: 'Failed to update credits' };
-            }
-        }
-
-        return { status: payment.status };
+        return { status: dbPayment.status as PaymentStatus };
     } catch (error) {
-        console.error('Payment Status: Error processing payment:', error);
+        console.error('Payment Status: Error checking payment:', error);
         return { status: 'error', error: error instanceof Error ? error.message : 'Unknown error' };
     }
 };
@@ -154,7 +76,7 @@ export default async function PaymentStatusPage({
         );
     }
 
-    const { status, error } = await processPayment(orderId);
+    const { status, error } = await checkPaymentStatus(orderId);
 
     if (status === 'succeeded') {
         redirect(`/${locale}/profile`);
