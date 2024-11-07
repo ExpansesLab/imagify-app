@@ -68,9 +68,9 @@ export async function POST(request: Request) {
                 });
                 console.log('Webhook: Updated user credits:', updatedUser);
 
-                // Обновляем статус платежа в базе данных
+                // Обновляем статус платежа в базе данных, используя tempPaymentId
                 const updatedPayment = await prisma.payment.update({
-                    where: { orderId },
+                    where: { tempPaymentId: orderId },
                     data: {
                         status: payment.status
                     }
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
             // Обновляем статус платежа в базе данных, даже если он не succeeded
             if (payment.metadata?.orderId) {
                 await prisma.payment.update({
-                    where: { orderId: payment.metadata.orderId },
+                    where: { tempPaymentId: payment.metadata.orderId },
                     data: {
                         status: payment.status
                     }

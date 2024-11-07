@@ -91,9 +91,9 @@ export default async function PaymentStatusPage({
     }
 
     try {
-        // Ищем платеж в базе данных по orderId
+        // Ищем платеж в базе данных по tempPaymentId (который содержит orderId)
         const dbPayment = await prisma.payment.findUnique({
-            where: { orderId }
+            where: { tempPaymentId: orderId }
         });
 
         if (!dbPayment) {
@@ -114,7 +114,7 @@ export default async function PaymentStatusPage({
         // Если статус изменился, обновляем его в базе данных
         if (payment.status !== dbPayment.status) {
             await prisma.payment.update({
-                where: { orderId },
+                where: { tempPaymentId: orderId },
                 data: { status: payment.status }
             });
         }

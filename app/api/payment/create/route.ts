@@ -88,11 +88,11 @@ export async function POST(request: Request) {
             throw new Error('Payment URL not received from YooKassa');
         }
 
-        // Сохраняем связь orderId и paymentId в базе данных
+        // Сохраняем платеж в базе данных, используя tempPaymentId для хранения orderId
         await prisma.payment.create({
             data: {
                 paymentId: payment.id,
-                orderId: orderId,
+                tempPaymentId: orderId, // Используем tempPaymentId вместо orderId
                 amount: Number(payment.amount.value),
                 currency: payment.amount.currency,
                 status: payment.status,
