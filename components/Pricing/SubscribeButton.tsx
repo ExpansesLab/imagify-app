@@ -38,16 +38,9 @@ export default function BuyCreditsButton({ planId, className, children }: BuyCre
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.error || data.details || 'Ошибка создания платежа');
+                throw new Error(data.message || data.error || 'Ошибка создания платежа');
             }
             
-            // Если есть существующий платеж, перенаправляем на его страницу статуса
-            if (data.existingPayment && data.paymentUrl) {
-                window.location.href = data.paymentUrl;
-                return;
-            }
-
-            // Если это новый платеж, перенаправляем на страницу оплаты
             if (data.paymentUrl) {
                 window.location.href = data.paymentUrl;
             } else {

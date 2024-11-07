@@ -29,24 +29,22 @@ export async function POST(request: Request) {
         const locale = referer.match(/\/(ru|en)\//) ? referer.match(/\/(ru|en)\//)?.[1] : 'ru';
         console.log('Payment Creation: Locale:', locale);
 
-        // Проверяем, есть ли незавершенные платежи
-        const pendingPayment = await prisma.payment.findFirst({
+        // Проверяем только платежи в процессе оплаты
+        const activePayment = await prisma.payment.findFirst({
             where: {
                 user: {
                     email: session.user.email
                 },
-                status: {
-                    in: ['pending', 'waiting_for_capture']
-                }
+                status: 'waiting_for_capture'
             }
         });
 
-        if (pendingPayment) {
-            console.log('Payment Creation: Found pending payment:', pendingPayment);
+        if (activePayment) {
+            console.log('Payment Creation: Found active payment:', activePayment);
             return NextResponse.json({
-                paymentUrl: `${process.env.NEXT_PUBLIC_APP_URL}/${locale}/payment/status?orderId=${pendingPayment.tempPaymentId}`,
-                existingPayment: true
-            });
+                error: 'Active payment exists',
+                message: 'У вас уже есть активный платеж в процессе оплаты'
+            }, { status: 400 });
         }
 
         const body = await request.json();
