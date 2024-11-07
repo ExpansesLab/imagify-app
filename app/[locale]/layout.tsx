@@ -21,7 +21,7 @@ export async function generateMetadata({ params }: any) {
     const t = await getTranslations("Home");
 
     return {
-        title: "Flux AI Image Generator - Free Image Generator | fluximage.org",
+        title: t("mainTitle"),
         description: t("layoutDescription"),
         icons: {
             icon: "/favicon.ico",
@@ -73,15 +73,15 @@ export default async function RootLayout({
     const messages = await getMessages();
 
     return (
-        <html lang={locale} className="dark" suppressHydrationWarning>
+        <html lang={locale} suppressHydrationWarning>
             <body className={cn(`dark:bg-neutral-800`, inter.className)}>
                 <Script
                     src="/themeSwitcher.js"
                     strategy="beforeInteractive"
                 ></Script>
                 <Script src="/spaghetti.js"></Script>
-                <NextIntlClientProvider messages={messages}>
-                    <SessionProvider>
+                <SessionProvider>
+                    <NextIntlClientProvider messages={messages}>
                         <AppContextProvider user={user}>
                             <div className="relative overflow-x-hidden">
                                 <GradientBg />
@@ -89,8 +89,8 @@ export default async function RootLayout({
                                 {children}
                             </div>
                         </AppContextProvider>
-                    </SessionProvider>
-                </NextIntlClientProvider>
+                    </NextIntlClientProvider>
+                </SessionProvider>
                 {process.env.NODE_ENV !== "development" ? (
                     <>
                         <GoogleAnalytics />

@@ -53,7 +53,7 @@ export async function POST(request: Request) {
         console.log('Webhook: Payment details:', JSON.stringify(payment, null, 2));
 
         if (payment.status === 'succeeded' && payment.metadata) {
-            const { userEmail, credits, planId, tempPaymentId } = payment.metadata;
+            const { userEmail, credits, planId } = payment.metadata;
             console.log('Webhook: Processing payment for user:', userEmail);
 
             try {
@@ -72,7 +72,6 @@ export async function POST(request: Request) {
                 const savedPayment = await prisma.payment.create({
                     data: {
                         paymentId: payment.id,
-                        tempPaymentId: tempPaymentId, // Сохраняем временный ID
                         amount: Number(payment.amount.value),
                         currency: payment.amount.currency,
                         status: payment.status,

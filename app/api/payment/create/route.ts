@@ -36,11 +36,6 @@ export async function POST(request: Request) {
         const idempotenceKey = crypto.randomUUID();
         const checkout = getCheckoutInstance();
 
-        // Генерируем временный ID для платежа
-        const tempPaymentId = crypto.randomUUID();
-        const baseReturnUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001'}/${locale}/payment/status`;
-        const returnUrl = `${baseReturnUrl}?orderId=${tempPaymentId}`;
-        
         // Создаем объект с данными платежа
         const paymentData: CreatePaymentPayload = {
             amount: {
@@ -49,15 +44,15 @@ export async function POST(request: Request) {
             },
             confirmation: {
                 type: 'redirect',
-                return_url: returnUrl
+                // URL возврата будет установлен после создания платежа
+                return_url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001'}/${locale}/payment/status`
             },
             capture: yookassaConfig.capture,
             description: plan.description,
             metadata: {
                 planId,
                 userEmail: session.user.email,
-                credits: plan.credits,
-                tempPaymentId
+                credits: plan.credits
             },
             receipt: {
                 customer: {
@@ -89,10 +84,10 @@ export async function POST(request: Request) {
             throw new Error('Payment URL not received from YooKassa');
         }
 
-        // Заменяем временный ID на реальный в URL возврата
-        const finalReturnUrl = returnUrl.replace(tempPaymentId, payment.id);
+        // Добавляем paymentId в URL возврата
+        const returnUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001'}/${locale}/payment/status?orderId=${payment.id}`;
         const confirmationUrl = new URL(payment.confirmation.confirmation_url);
-        confirmationUrl.searchParams.set('return_url', finalReturnUrl);
+        confirmationUrl.searchParams.set('return_url', returnUrl);
 
         return NextResponse.json({
             paymentUrl: confirmationUrl.toString(),

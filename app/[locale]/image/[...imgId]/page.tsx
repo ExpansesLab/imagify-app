@@ -1,8 +1,6 @@
 /* eslint-disable jsx-a11y/alt-text */
 /* eslint-disable @next/next/no-img-element */
-// import UploadSection from "@/components/Upload/UploadSection";
 import { getServerAuthSession } from "@/auth";
-// import { Upload } from "lucide-react";
 import { Toaster } from "sonner";
 import { getUserInfo } from "@/models/user";
 import { queryGenerationByUser } from "@/models/generation";
@@ -33,10 +31,7 @@ export async function generateMetadata({ params: { locale, imgId = [""] } }: {pa
         model = generation.model;
         prompts = generation.prompt;
     }
-    //   const layoutTitle = t.markup('layoutTitle', {
-    //     modelName: (chunks) => `<span className="text-blue-600">Flux.1 Pro</span>`
-    //   });
-    //   console.info("layoutTitle", layoutTitle)
+
     return {
         title: t("layoutTitle", { modelName: `flux.1 ${model}` }),
         description: t("layoutDescription", {
@@ -85,7 +80,6 @@ export default async function ImageDetailsPage({
 
     return (
         <>
-            {/* <main className="pt-4 relative z-50"> */}
             <div className="max-w-[85rem] mx-auto px-4 sm:px-6 lg:px-8 pb-10 lg:pb-16">
                 <ol className="flex items-center whitespace-nowrap">
                     <li className="inline-flex items-center">
@@ -94,7 +88,7 @@ export default async function ImageDetailsPage({
                             href="/"
                             title="Flux Image AI Generator"
                         >
-                            Home
+                            {t("navigation.home")}
                         </a>
                         <ChevronRight className="shrink-0 mx-2 size-4 text-gray-400 dark:text-neutral-600" />
                     </li>
@@ -104,7 +98,7 @@ export default async function ImageDetailsPage({
                             href="/explore-image"
                             title="Explore Flux Image"
                         >
-                            Explore
+                            {t("navigation.explore")}
                             <ChevronRight className="shrink-0 mx-2 size-4 text-gray-400 dark:text-neutral-600" />
                         </a>
                     </li>
@@ -113,17 +107,10 @@ export default async function ImageDetailsPage({
                         aria-current="page"
                         title=""
                     >
-                        Application
+                        {t("navigation.application")}
                     </li>
                 </ol>
                 <div className="mx-auto mt-10">
-                    {/* max-w-2xl */}
-                    {/* <div className="mt-5 ">
-                        <h1 className="block font-semibold text-gray-800 text-4xl md:text-5xl lg:text-6xl dark:text-neutral-200">
-                            {t("pageTitle")}
-                        </h1>
-                    </div> */}
-                    {/* Hero */}
                     <div className="max-w-2xl">
                         <h1
                             className="text-2xl font-bold md:text-3xl dark:text-white"
@@ -131,20 +118,12 @@ export default async function ImageDetailsPage({
                         ></h1>
                     </div>
 
-                    {/*  max-w-3xl */}
-                    {/* <div className="mt-5 max-w-5xl mx-auto">
-                        <p className="text-lg text-gray-600 dark:text-neutral-400">
-                            {t("pageDescription")}
-                        </p>
-                    </div> */}
-
                     <ImageDetails generation={generation} />
                 </div>
             </div>
 
             <FooterSection />
             <Toaster position="top-center" richColors />
-            {/* </main> */}
         </>
     );
 }

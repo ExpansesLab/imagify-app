@@ -53,13 +53,12 @@ export default async function PaymentStatusPage({
 }) {
     const t = await getTranslations("Payment");
     
-    // Проверяем orderId из URL
-    const tempPaymentId = searchParams.orderId;
-    console.log('Payment Status: URL parameters:', searchParams);
-    console.log('Payment Status: Checking payment with temp ID:', tempPaymentId);
+    // Получаем paymentId из URL
+    const paymentId = searchParams.orderId;
+    console.log('Payment Status: Checking payment ID:', paymentId);
     console.log('Payment Status: Current locale:', locale);
 
-    if (!tempPaymentId) {
+    if (!paymentId) {
         console.log('Payment Status: No payment ID provided');
         return (
             <main className="min-h-screen flex items-center justify-center px-4">
@@ -91,12 +90,12 @@ export default async function PaymentStatusPage({
     }
 
     try {
-        // Сначала ищем платеж в нашей базе данных по временному ID
+        // Проверяем статус платежа в базе данных
         const dbPayment = await prisma.payment.findUnique({
-            where: { tempPaymentId }
+            where: { paymentId }
         });
 
-        // Если платеж найден в базе и статус succeeded, показываем страницу успеха с автоматическим редиректом
+        // Если платеж найден в базе и статус succeeded, показываем страницу успеха
         if (dbPayment?.status === 'succeeded') {
             console.log('Payment Status: Payment found in database with succeeded status');
             return (
@@ -127,9 +126,6 @@ export default async function PaymentStatusPage({
             );
         }
 
-        // Если платеж найден в базе, используем его реальный ID для запроса к ЮKassa
-        const paymentId = dbPayment?.paymentId || tempPaymentId;
-
         const checkout = new YooCheckout({
             shopId: getYooKassaCredentials().shopId,
             secretKey: getYooKassaCredentials().secretKey
@@ -138,7 +134,7 @@ export default async function PaymentStatusPage({
         console.log('Payment Status: Fetching payment details...');
         const payment = await getPaymentWithRetry(checkout, paymentId);
         console.log('Payment Status: Payment details received:', payment);
-        
+
         if (!payment) {
             throw new Error('Payment not found');
         }

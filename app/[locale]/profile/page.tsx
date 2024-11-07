@@ -24,6 +24,7 @@ export default async function ProfilePage({
     params: { locale: string };
 }) {
     const session = await getServerSession();
+    const t = await getTranslations("Profile");
 
     if (!session || !session.user) {
         redirect(`/${locale}/login`);
@@ -59,12 +60,12 @@ export default async function ProfilePage({
 
                         <div className="border-t border-gray-200 dark:border-neutral-700 pt-6">
                             <h3 className="text-xl font-semibold text-gray-900 dark:text-neutral-100 mb-4">
-                                Информация о пользователе
+                                {t("userInfo")}
                             </h3>
                             <div className="grid grid-cols-1 gap-4">
                                 <div>
                                     <p className="text-sm font-medium text-gray-500 dark:text-neutral-400">
-                                        Доступные кредиты
+                                        {t("availableCredits")}
                                     </p>
                                     <div className="flex items-center justify-between">
                                         <p className="text-gray-900 dark:text-neutral-100">
@@ -74,7 +75,7 @@ export default async function ProfilePage({
                                             href={`/${locale}/pricing`}
                                             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                                         >
-                                            Купить дополнительные кредиты
+                                            {t("buyMoreCredits")}
                                         </Link>
                                     </div>
                                 </div>

@@ -53,9 +53,9 @@ export default async function PricingPage() {
                         <span className="mt-5 font-bold text-5xl text-gray-800 dark:text-gray-200">
                             ₽{plans.free.price}
                         </span>
-                        <p className="mt-2 text-sm text-gray-500">RUB</p>
+                        <p className="mt-2 text-sm text-gray-500">{t("currency")}</p>
                         <div className="mt-5 text-gray-800 dark:text-gray-200">
-                            <span className="font-bold text-2xl">{plans.free.credits}</span> кредитов
+                            <span className="font-bold text-2xl">{plans.free.credits}</span> {t("credits")}
                         </div>
                         <ul className="mt-7 space-y-2.5 text-sm flex-grow">
                             {[...Array(Number(t("pricingPlans.free.features.length")))].map((_, index) => (
@@ -85,9 +85,9 @@ export default async function PricingPage() {
                         <span className="mt-5 font-bold text-5xl text-gray-800 dark:text-gray-200">
                             ₽{plans.basic.price}
                         </span>
-                        <p className="mt-2 text-sm text-gray-500">RUB</p>
+                        <p className="mt-2 text-sm text-gray-500">{t("currency")}</p>
                         <div className="mt-5 text-gray-800 dark:text-gray-200">
-                            <span className="font-bold text-2xl">{plans.basic.credits}</span> кредитов
+                            <span className="font-bold text-2xl">{plans.basic.credits}</span> {t("credits")}
                         </div>
                         <ul className="mt-7 space-y-2.5 text-sm flex-grow">
                             {[...Array(Number(t("pricingPlans.basic.features.length")))].map((_, index) => (
@@ -103,7 +103,7 @@ export default async function PricingPage() {
                             planId="basic"
                             className="mt-5 w-full py-3 px-4 inline-flex justify-center items-center gap-2 rounded-md border-2 border-blue-600 font-semibold text-blue-600 hover:text-white hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all text-sm dark:focus:ring-offset-gray-800"
                         >
-                            Купить {plans.basic.credits} кредитов
+                            {t("buyCredits", { count: plans.basic.credits })}
                         </BuyCreditsButton>
                     </div>
 
@@ -115,9 +115,9 @@ export default async function PricingPage() {
                         <span className="mt-5 font-bold text-5xl text-gray-800 dark:text-gray-200">
                             ₽{plans.pro.price}
                         </span>
-                        <p className="mt-2 text-sm text-gray-500">RUB</p>
+                        <p className="mt-2 text-sm text-gray-500">{t("currency")}</p>
                         <div className="mt-5 text-gray-800 dark:text-gray-200">
-                            <span className="font-bold text-2xl">{plans.pro.credits}</span> кредитов
+                            <span className="font-bold text-2xl">{plans.pro.credits}</span> {t("credits")}
                         </div>
                         <ul className="mt-7 space-y-2.5 text-sm flex-grow">
                             {[...Array(Number(t("pricingPlans.pro.features.length")))].map((_, index) => (
@@ -133,7 +133,7 @@ export default async function PricingPage() {
                             planId="pro"
                             className="mt-5 w-full py-3 px-4 inline-flex justify-center items-center gap-2 rounded-md border-2 border-blue-600 font-semibold text-blue-600 hover:text-white hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all text-sm dark:focus:ring-offset-gray-800"
                         >
-                            Купить {plans.pro.credits} кредитов
+                            {t("buyCredits", { count: plans.pro.credits })}
                         </BuyCreditsButton>
                     </div>
 
@@ -145,9 +145,9 @@ export default async function PricingPage() {
                         <span className="mt-5 font-bold text-5xl text-gray-800 dark:text-gray-200">
                             ₽{plans.premium.price}
                         </span>
-                        <p className="mt-2 text-sm text-gray-500">RUB</p>
+                        <p className="mt-2 text-sm text-gray-500">{t("currency")}</p>
                         <div className="mt-5 text-gray-800 dark:text-gray-200">
-                            <span className="font-bold text-2xl">{plans.premium.credits}</span> кредитов
+                            <span className="font-bold text-2xl">{plans.premium.credits}</span> {t("credits")}
                         </div>
                         <ul className="mt-7 space-y-2.5 text-sm flex-grow">
                             {[...Array(Number(t("pricingPlans.premium.features.length")))].map((_, index) => (
@@ -163,7 +163,7 @@ export default async function PricingPage() {
                             planId="premium"
                             className="mt-5 w-full py-3 px-4 inline-flex justify-center items-center gap-2 rounded-md border-2 border-blue-600 font-semibold text-blue-600 hover:text-white hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all text-sm dark:focus:ring-offset-gray-800"
                         >
-                            Купить {plans.premium.credits} кредитов
+                            {t("buyCredits", { count: plans.premium.credits })}
                         </BuyCreditsButton>
                     </div>
                 </div>

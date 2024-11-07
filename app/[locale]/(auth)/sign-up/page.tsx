@@ -8,7 +8,7 @@ import Link from "next/link";
 export async function generateMetadata({ params }: any) {
     const t = await getTranslations("Playground");
     return {
-        title: "Flux AI Image SignUp - Free Image Generator | fluximage.org",
+        title: "Imagify - регистрация | imagify.ru",
         description: t("layoutDescription"),
         icons: {
             icon: "/favicon.ico",
